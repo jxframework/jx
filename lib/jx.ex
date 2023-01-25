@@ -80,7 +80,7 @@ defmodule Jx do
     end
   end
 
-  defp macro_j(_, _) do
+  defp macro_j(_) do
     raise ArgumentError
   end
 
