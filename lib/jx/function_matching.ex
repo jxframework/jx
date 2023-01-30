@@ -8,12 +8,15 @@ defmodule Jx.FunctionMatching do
       raise MatchError
 
     else
-      index = {
-        [lhs, rhs] |> Enum.zip |> Enum.map(fn {a, b} -> {:=, [], [a, b]} end),
-        %Jx{},
-        []
-      }
-      next(%Jx{expr: expr, index: index})
+      path = 
+        [lhs, rhs]
+        |> Enum.zip
+        |> Enum.map(fn {a, b} -> 
+          %Jx{expr: {:=, [], [a, b]}, index: nil} 
+        end)
+        |> List.update_at(0, &{%Jx{}, &1})
+
+      next(%Jx{expr: expr, index: {path, []}})
     end
   end
 
@@ -40,6 +43,7 @@ defmodule Jx.FunctionMatching do
   end
 
   def j({:=, _, [_, _]} = expr) do
+    # Evaluate as Elixir expression.
     try do
       Code.eval_quoted(expr)
     rescue
@@ -55,108 +59,69 @@ defmodule Jx.FunctionMatching do
     end
   end
   
-  defp next(%Jx{expr: {:=, _, [a,b]}, index: index}) when is_list(index) do
-    Stream.unfold(index, fn
+  defp next(%Jx{expr: expr, index: index}) when is_list(index) do
+    index
+    |> Stream.unfold(fn
       ([]) -> nil
-
-      ([function | rest]) when is_function(function) ->
-        context = Jx.bind_function(b, function, %Jx{})
-        b = Jx.apply_binding(b, context)
-        
-        case j({:=, [], [a,b]}) do
-          %Jx{no_match: true} = j -> 
-            {j, rest}
-
-          j ->
-            binding = Map.merge(j.binding, context.binding, fn
-              (_, v, v) -> v
-              (_, _, _) -> raise MatchError
-            end)
-
-            {%Jx{binding: binding, index: rest}, rest}
-        end
 
       ([{module, function_name, args} | rest]) ->
         %Jx{index: index} = apply(module, function_name, args)
-        {%Jx{no_match: true}, index ++ rest}
+        {nil, index ++ rest}
 
-    end)
-    |> Enum.find_value(%Jx{no_match: true}, fn
-      (%Jx{no_match: true}) -> nil
+      ([function | rest]) when is_function(function) ->
+        {:=, _, [_, rhs]} = expr
+        context = Jx.bind_function(rhs, function, %Jx{})
+        match = expr |> Jx.apply_binding(context) |> j
+        
+        case match do
+          %Jx{no_match: true} -> 
+            {nil, rest}
 
-      (result) -> result
+          %Jx{binding: binding} ->
+            binding = Map.merge(context.binding, binding)
+            {%Jx{binding: binding, index: rest}, rest}
+        end
     end)
+    |> Stream.filter(fn %Jx{} -> true; _ -> false end)
+    |> Enum.find(%Jx{no_match: true}, &Function.identity/1)
   end
 
-  defp next(%Jx{index: {_, _, _} = index}) do
+  defp next(%Jx{index: {_, _} = index}) do
     index
     |> Stream.unfold(fn
-      ({[], _ctx, []}) -> nil
+      ({[], []}) -> nil
 
-      ({[], _ctx, [{expr, ctx} | rest]}) ->
-        {%Jx{no_match: true}, {[expr], ctx, rest}}
-
-      ({[%Jx{expr: expr} = match | rest], ctx, stack}) ->
-
-        case next(match) do
-          %Jx{no_match: true} when stack === [] -> nil
-
-          %Jx{no_match: true} = j ->
-            [{prev_match, prev_context} | stack] = stack
-            {j, {[prev_match, match | rest], prev_context, stack}}
-
-          j when rest === [] ->
-            binding = Map.merge(j.binding, ctx.binding, fn
-              (_, v, v) -> v
-              (_, _, _) -> raise MatchError
-            end)
-
-            index = {rest, %Jx{binding: binding}, [{%Jx{j | expr: expr}, ctx} | stack]}
-            {%Jx{binding: binding, index: index}, index}
-
-          j ->
-            binding = Map.merge(j.binding, ctx.binding, fn
-              (_, v, v) -> v
-              (_, _, _) -> raise MatchError
-            end)
-
-            {%Jx{no_match: true}, {rest, %Jx{binding: binding}, [{%Jx{j | expr: expr}, ctx} | stack]} }
+      ({[{%Jx{} = context, %Jx{expr: expr, index: index} = next} | _] = path, stack}) ->
+        match = if index === nil do
+          expr |> Jx.apply_binding(context) |> j
+        else
+          next(next)
         end
-
-      ({[{:=, _, [_, _]} = expr | rest], ctx, stack}) ->
-        match =
-          expr
-          |> Jx.apply_binding(ctx)
-          |> j
 
         case match do
-          %Jx{no_match: true} when stack === [] -> nil
+          %Jx{no_match: true} ->
+            if stack === [] do
+              {nil, {[], []}}
+            else
+              path = List.update_at(path, 0, &elem(&1, 1))
+              [next | stack] = stack
+              {nil, {[next | path], stack}}
+            end
 
-          %Jx{no_match: true} = j ->
-            [{prev_match, prev_context} | stack] = stack
-            {j, {[prev_match, expr | rest], prev_context, stack}}
+          %Jx{binding: binding} = j ->
+            binding = Map.merge(context.binding, binding)
 
-          j when rest === [] ->
-            binding = Map.merge(j.binding, ctx.binding, fn
-              (_, v, v) -> v
-              (_, _, _) -> raise MatchError
-            end)
+            path = path |> tl |> List.update_at(0, &{%Jx{binding: binding}, &1})
+            index = {path, [{context, %Jx{j | expr: expr}} | stack]}
 
-            index = {rest, %Jx{binding: binding}, [{%Jx{j | expr: expr}, ctx} | stack]}
-            {%Jx{binding: binding, index: index}, index}
-
-          j ->
-            binding = Map.merge(j.binding, ctx.binding, fn
-              (_, v, v) -> v
-              (_, _, _) -> raise MatchError
-            end)
-
-            {%Jx{no_match: true}, {rest, %Jx{binding: binding}, [{%Jx{j | expr: expr}, ctx} | stack]} }
+            if path === [] do
+              {%Jx{binding: binding, index: index}, index}
+            else
+              {nil, index}
+            end
         end
     end)
-    |> Enum.find_value(%Jx{no_match: true}, fn
-      (%Jx{no_match: true}) -> nil
-      (result) -> result
-    end)
+    |> Stream.filter(fn %Jx{} -> true; _ -> false end)
+    |> Enum.find(%Jx{no_match: true}, &Function.identity/1)
   end
 end
