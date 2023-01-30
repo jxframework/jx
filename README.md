@@ -1,3 +1,5 @@
+# Jx
+
 [![Package](https://img.shields.io/badge/-Package-important)](https://hex.pm/packages/jx) [![Documentation](https://img.shields.io/badge/-Documentation-blueviolet)](https://hexdocs.pm/jx)
 
 Jx is a library for Elixir that brings binding of functions to variables to pattern matching. Its high-level features are:

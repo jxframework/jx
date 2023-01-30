@@ -2,7 +2,7 @@ defmodule Jx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/jxframework/jx"
-  @version "0.1.1"
+  @version "0.2.0"
 
   def project do
     [
@@ -14,7 +14,8 @@ defmodule Jx.MixProject do
       docs: docs(),
       name: "Jx",
       description: "Pattern matching with binding of functions to variables for Elixir",
-      package: package()
+      package: package(),
+      source_url: @source_url
     ]
   end
 

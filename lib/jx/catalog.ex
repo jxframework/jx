@@ -16,13 +16,15 @@ defmodule Jx.Catalog.Helper do
       defmodule unquote(Module.concat(Jx.Catalog, module)) do
         @moduledoc false
 
-        def fetch([arity: arity]) do
+        def j({:&, _, [{:/, _, [{:j, _, _}, arity]}]} = a) do
           included_keys = unquote(Macro.escape(included_keys))
 
-          Enum.flat_map(included_keys, fn
+          index = Enum.flat_map(included_keys, fn
             {name, ^arity} -> [Function.capture(unquote(module), name, arity)]
             _ -> []
           end)
+
+          %Jx{index: index}
         end
       end
     end
@@ -31,7 +33,7 @@ end
 
 defmodule Jx.Catalog do
   @moduledoc """
-  This module contains the modules and functions that are searched through for function matching. 
+  This module tracks the modules and functions that use in the search for function matching. 
   """
 
   alias Jx.Catalog.Helper
@@ -55,16 +57,6 @@ defmodule Jx.Catalog do
       ]
     }
   ]
-
-  @_modules Enum.map(modules, fn {name, _} -> name; name -> name end)
-
-  @doc """
-  Returns the list of modules available in the catalog.
-  """
-  def modules do
-    @_modules
-  end
-
   Enum.each(modules, fn 
     ({module, args}) ->
       quoted_code = Helper.define_catalog_module(module, args)
@@ -74,4 +66,21 @@ defmodule Jx.Catalog do
       quoted_code = Helper.define_catalog_module(module)
       Module.eval_quoted(__MODULE__, quoted_code)
   end)
+
+  @_modules Enum.map(modules, fn {name, _} -> name; name -> name end)
+
+  @doc """
+  Returns a `%Jx{}` context that searches the modules of the catalog for a match.
+  
+  ## Examples
+  ```elixir 
+  iex> Jx.Catalog.j(quote(do: &j/1))
+  #Jx<>
+  ```
+  """
+  def j({:&, _, [{:/, _, [{:j, _, atom}, _arity]}]} = expr) when is_atom(atom) do
+    modules = @_modules
+    index = for m <- modules, do: {Module.concat(__MODULE__, m), :j, [expr]}
+    %Jx{index: index}
+  end
 end

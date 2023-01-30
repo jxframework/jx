@@ -3,7 +3,39 @@ defmodule Jx do
   This is the documentation for the Jx framework project.
   """
 
-  defstruct [binding: %{}, no_match: false]
+  defstruct [binding: %{}, no_match: false, index: [], expr: nil]
+
+  @doc false
+  def apply_binding(term, %Jx{binding: binding}) do
+    Macro.prewalk(term, fn 
+      ({:j, meta, args} = t) ->
+        name = meta[:jx_name]
+        case binding[name] do
+          nil -> t
+          val -> quote do
+            unquote(val).(unquote_splicing(args))
+          end
+        end
+
+      ({var_name, _meta, context} = t) when is_atom(context) ->
+        case binding[var_name] do
+          nil -> t
+          val -> Macro.escape(val)
+        end
+
+      (t) -> t
+    end)
+  end
+
+  @doc false
+  def bind_function({:j, meta, _}, value, %Jx{} = context) do
+    case Keyword.get(meta, :jx_name) do
+      nil ->
+        raise ArgumentError
+      name ->
+        put_in context.binding[name], value
+    end
+  end
 
   defimpl Inspect do
     def inspect(%Jx{no_match: true}, _opts) do
