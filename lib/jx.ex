@@ -42,6 +42,14 @@ defmodule Jx do
       "#Jx<no match>"
     end
 
+    def inspect(%Jx{binding: %{} = binding}, _opts) do
+      binding 
+      |> Enum.sort 
+      |> Enum.map(fn {k, v} -> "#{k}=#{inspect(v)}" end) 
+      |> Enum.join(", ")
+      |> (&"#Jx<#{&1}>").()
+    end
+
     def inspect(%Jx{binding: binding}, _opts) do
       binding 
       |> Enum.sort 
@@ -85,6 +93,27 @@ defmodule Jx do
     macro_j(expr)
   end
 
+  defp macro_j({:<-, _, [args, context_var]}) do
+    {_left, acc} = parse_left(args, MapSet.new)
+
+    variable_matchers =
+      acc
+      |> Enum.filter(fn :j -> false; _ -> true end)
+      |> Enum.flat_map(fn
+        (:j) -> []
+        (name) ->
+          [{name, Macro.var(name, nil)}]
+      end)
+      |> Enum.sort
+    match_lhs = quote do
+      %Jx{binding: %{unquote_splicing(variable_matchers)}, no_match: false}
+    end
+
+    quote do
+      unquote(match_lhs) = Jx.FunctionMatching.next(unquote(context_var))
+    end
+  end
+
   defp macro_j({:=, meta, [left, right]}) do
     {left, acc} = parse_left(left, MapSet.new)
     {right, acc} = parse_right(right, acc)
@@ -119,9 +148,9 @@ defmodule Jx do
   defp parse_left(term, acc) do
     case term do
       {name, _meta, context} when is_atom(name) and is_atom(context) ->
-        if name |> Atom.to_string |> String.starts_with?("j") do
-          raise ArgumentError
-        end
+        # if name |> Atom.to_string |> String.starts_with?("j") do
+        #   raise ArgumentError
+        # end
 
         {term, MapSet.put(acc, name)}
 

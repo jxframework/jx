@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.0 (2023-02-03)
+
+* Implement nested matching with initial support for `Kernel.*/2`, `Kernel.+/2`, and `Integer.pow/2` (e.g. `j 10 = jx.(2, jy.(2, 3))`)
+
 ## v0.2.0 (2023-01-29)
 
 * Implement new search approach to allow better matching compared to previous greedy approach

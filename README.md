@@ -13,7 +13,7 @@ The package can be installed by adding `jx` to your list of dependencies in `mix
 ```elixir
 def deps do
   [
-    {:jx, "~> 0.2"}
+    {:jx, "~> 0.3"}
   ]
 end
 ```

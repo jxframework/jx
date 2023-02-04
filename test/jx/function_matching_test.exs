@@ -75,4 +75,81 @@ defmodule Jx.FunctionMatchingTest do
       assert jx === &List.to_string/1
     end
   end
+
+  describe "no match" do
+    test "[1, 99] = [jx.(1), jy.(2)]" do
+      assert_raise MatchError, fn ->
+        j [1, 99] = [jx.(1), jy.(2)]
+      end
+    end
+  end
+
+  @tag :only
+  describe "nested function variables" do
+    test "8 = jx.(2, jy.(2,3))" do
+      j 8 = jx.(2, jy.(2, 3))
+
+      assert 8 === jx.(2, jy.(2, 3))
+
+      # Multiple options possible:
+      # jx=&Kernel.+/2, jy=&Kernel.*/2
+      # jx=&Integer.pow/2, jy=&Bitwise.bor/2
+    end
+    
+    test "10 = jx.(2, jy.(2,3))" do
+      j 10 = jx.(2, jy.(2, 3))
+
+      assert jx === Function.capture(Kernel, :+, 2)
+      assert jy === &Integer.pow/2
+    end
+
+    test "{10, 32} = {jx.(2, jy.(2,3)), jy.(2, jx.(2,3))}" do
+      j {10, 32} = {jx.(2, jy.(2,3)), jy.(2, jx.(2,3))}
+
+      assert jx === Function.capture(Kernel, :+, 2)
+      assert jy === &Integer.pow/2
+    end
+
+    test "{32, 10} = {jx.(2, jy.(2,3)), jy.(2, jx.(2,3))}" do
+      j {32, 10} = {jx.(2, jy.(2,3)), jy.(2, jx.(2,3))}
+
+      assert jx === &Integer.pow/2
+      assert jy === Function.capture(Kernel, :+, 2)
+    end
+
+    test "{10, 8} = {jx.(2, jy.(2,3)), jy.(2, jx.(2,3))}" do
+      j {10, 8} = {jx.(2, jy.(2,3)), jy.(2, jx.(2,3))}
+
+      assert jx === Function.capture(Kernel, :*, 2)
+      assert jy === Function.capture(Kernel, :+, 2)
+    end
+
+    test "93 = jx.(1, jy.(23,4))" do
+      j 93 = jx.(1, jy.(23,4))
+
+      assert jx === Function.capture(Kernel, :+, 2)
+      assert jy === Function.capture(Kernel, :*, 2)
+    end
+
+    test "93 = jx.(jy.(23,4), 1)" do
+      j 93 = jx.(jy.(23,4), 1)
+
+      assert jx === Function.capture(Kernel, :+, 2)
+      assert jy === Function.capture(Kernel, :*, 2)
+    end
+
+    test "12 = jx.(2, jy.(2,3))" do
+      j 12 = jx.(2, jy.(2, 3))
+
+      assert jx === Function.capture(Kernel, :*, 2)
+      assert jy === Function.capture(Kernel, :*, 2)
+    end
+ 
+    test "16 = jx.(2, jy.(2,3))" do
+      j 16 = jx.(2, jy.(2, 3))
+
+      assert jx === Function.capture(Kernel, :*, 2)
+      assert jy === &Integer.pow/2
+    end
+  end
 end
