@@ -84,7 +84,6 @@ defmodule Jx.FunctionMatchingTest do
     end
   end
 
-  @tag :only
   describe "nested function variables" do
     test "8 = jx.(2, jy.(2,3))" do
       j 8 = jx.(2, jy.(2, 3))
@@ -150,6 +149,91 @@ defmodule Jx.FunctionMatchingTest do
 
       assert jx === Function.capture(Kernel, :*, 2)
       assert jy === &Integer.pow/2
+    end
+  end
+
+  describe "regular variables in expression of match operator" do
+    test "a = 1; j 1 = a" do
+      a = 1
+      j 1 = a
+    end
+
+    test "a = 1; j 1 = jx.(a)" do
+      a = 1
+      j 1 = jx.(a)
+      assert jx === &Function.identity/1
+    end
+
+    test "f = &Function.identity/1; j 1 = f.(1)" do
+      f = &Function.identity/1
+      j 1 = f.(1)
+    end
+
+    test "f = fn x -> x end; j 1 = f.(1)" do
+      f = fn x -> x end
+      j 1 = f.(1)
+    end
+
+    test "f = &(&1); j 1 = f.(1)" do
+      f = &(&1)
+      j 1 = f.(1)
+    end
+  end
+
+  describe "regular variables in expression of match operator mixed with j variables" do
+    test "f = &Function.identity/1; j 1 = f.(jx.(1))" do
+      f = &Function.identity/1
+      j 1 = f.(jx.(1))
+      assert jx === &Function.identity/1
+    end
+
+    test "f = fn x -> x end; j 1 = f.(jx.(1))" do
+      f = fn x -> x end
+      assert catch_throw(j 1 = f.(jx.(1))) === :unimplemented
+    end
+
+    test "f = &(&1); j 1 = f.(jx.(1))" do
+      f = &(&1)
+      assert catch_throw(j 1 = f.(jx.(1))) === :unimplemented
+    end
+
+    test "f = &Function.identity/1; j 1 = (f.(jx)).(1)" do
+      # f = &Function.identity/1
+      # j 1 = (f.(jx)).(1))
+
+      assert catch_throw(Macro.expand(quote do
+        j 1 = (f.(jx)).(1)
+      end, __ENV__)) === :unimplemented
+    end
+
+    test "a = 2; j 10 = jx.(a, jy.(a,3))" do
+      a = 2
+      j 10 = jx.(a, jy.(a,3))
+
+      assert jx === Function.capture(Kernel, :+, 2)
+      assert jy === &Integer.pow/2
+    end
+
+    test "a = 2; b = 3; j {10, 8} = {jx.(2, jy.(a,b)), jy.(a, jx.(2,3))}" do
+      a = 2
+      b = 3
+      j {10, 8} = {jx.(2, jy.(a,b)), jy.(a, jx.(2,3))}
+
+      assert jx === Function.capture(Kernel, :*, 2)
+      assert jy === Function.capture(Kernel, :+, 2)
+    end
+
+    test "list = [5, 19]; j 139 = jx.(list, 24)" do
+      list = [5, 19]
+      j 139 = jx.(list, 24)
+      assert jx === &Integer.undigits/2
+    end
+  end
+
+  describe "Function module" do
+    test "j 1 = Function.identity(jx.(1))" do
+      j 1 = Function.identity(jx.(1))
+      assert jx === &Function.identity/1
     end
   end
 end

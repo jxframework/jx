@@ -41,20 +41,32 @@ end
 
 defmodule Jx.Catalog do
   @moduledoc """
-  This module tracks the modules and functions that use in the search for function matching. 
+  This module tracks the modules and functions that are used as possible matches in function matching. 
   """
 
   alias Jx.Catalog.Helper
 
   modules = [
     {
-      Function, only: [identity: 1]
+      Function, only: [identity: 1],
+      defs: [
+        quote do
+          # XXX: this is causing test failures when it probably should not.
+          # def j({:=, _, [a, {:identity, _, b}]}) do
+          #   %Jx{expr: {:=, [], [a, b]}, index: nil}
+          # end
+
+          def j({:=, _, [a, {:identity, _, [{:j, _, _} = j]}]}) do
+            %Jx{expr: {:=, [], [a, j]}, index: nil}
+          end
+        end
+      ]
     },
     {
       Integer, except: [to_char_list: 1, to_char_list: 2],
       defs: [
         quote do
-          def j({:=, _, [x, {:pow, _, [1, {:j, _, _} = j]}]} = expr) when is_integer(x) and x > 0 do
+          def j({:=, _, [x, {:pow, _, [1, {:j, _, _}]}]}) when is_integer(x) and x > 0 do
             %Jx{no_match: true}
           end
 

@@ -41,11 +41,30 @@ defmodule Jx.FunctionMatching do
   end
 
   def j({:=, _, [lhs, {{:., _, [function]}, _, args}]}) do
-    %{module: module, name: name, arity: _arity} = function |> :erlang.fun_info |> Enum.into(%{})
-    j({:=, [], [lhs, {{:., [], [{:__aliases__, [], [module]}, name]}, [], args}]})
+    fun_info = function |> :erlang.fun_info |> Map.new
+    case fun_info do
+      %{type: :local} ->
+        throw :unimplemented
+
+      %{module: module, name: name} ->
+        j({:=, [], [lhs, {{:., [], [{:__aliases__, [], [module]}, name]}, [], args}]})
+    end
   end
 
   def j({:=, _, [lhs, {{:., _, [{:__aliases__, _, [module]}, function_name]}, _, args}]} = expr0) when is_atom(function_name) do
+    expr = {:=, [], [lhs, {function_name, [], args}]}
+    catalog_module = Module.concat(Jx.Catalog, module)
+    index = [{catalog_module, :j, [expr]}]
+
+    case next(%Jx{expr: expr, index: index}) do
+      %Jx{no_match: true} ->
+        elixir_j(expr0)
+      %Jx{} = j ->
+        %Jx{j | expr: expr0}
+    end
+  end
+
+  def j({:=, _, [lhs, {{:., _, [module, function_name]}, _, args}]} = expr0) when is_atom(module) and is_atom(function_name) do
     expr = {:=, [], [lhs, {function_name, [], args}]}
     catalog_module = Module.concat(Jx.Catalog, module)
     index = [{catalog_module, :j, [expr]}]

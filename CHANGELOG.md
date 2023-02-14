@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.0 (2023-02-13)
+
+* Implement support for plain variables in right-hand side of match expressions (e.g. `a = 10; j 10 = jx.(a)`)
+* Add support for j-variables in `Function.identity/1` (e.g. `j 1 = Function.identity(jx.(1))`
+
 ## v0.3.0 (2023-02-03)
 
 * Implement nested matching with initial support for `Kernel.*/2`, `Kernel.+/2`, and `Integer.pow/2` (e.g. `j 10 = jx.(2, jy.(2, 3))`)
