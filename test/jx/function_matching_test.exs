@@ -38,6 +38,7 @@ defmodule Jx.FunctionMatchingTest do
     test "[[a,b], [a,b]] = [jx.(93), jx.(39)]" do
       assert_raise MatchError, fn ->
         j [[a,b], [a,b]] = [jx.(93), jx.(39)]
+        _ = [a,b,jx]
       end
     end
 
@@ -80,6 +81,21 @@ defmodule Jx.FunctionMatchingTest do
     test "[1, 99] = [jx.(1), jy.(2)]" do
       assert_raise MatchError, fn ->
         j [1, 99] = [jx.(1), jy.(2)]
+        _ = [jx, jy]
+      end
+    end
+
+    test "5 = jx.(6, 100000000000000000000000)" do
+      assert_raise MatchError, fn ->
+        j 5 = jx.(6, 100000000000000000000000)
+        _ = jx
+      end
+    end
+
+    test "5 = jx.(6, 10**23)" do
+      assert_raise MatchError, fn ->
+        j 5 = jx.(6, 10**23)
+        _ = jx
       end
     end
   end
@@ -164,6 +180,14 @@ defmodule Jx.FunctionMatchingTest do
       assert jx === &Function.identity/1
     end
 
+    test "a = 2; b = 3" do
+      a = 2
+      b = 3
+      j 6 = jx.(a+1, b)
+
+      assert jx === Function.capture(Kernel, :+, 2)
+    end
+
     test "f = &Function.identity/1; j 1 = f.(1)" do
       f = &Function.identity/1
       j 1 = f.(1)
@@ -189,17 +213,24 @@ defmodule Jx.FunctionMatchingTest do
 
     test "f = fn x -> x end; j 1 = f.(jx.(1))" do
       f = fn x -> x end
-      assert catch_throw(j 1 = f.(jx.(1))) === :unimplemented
+      result = catch_throw do
+        j 1 = f.(jx.(1))
+        _ = jx
+      end
+      assert result === :unimplemented
     end
 
     test "f = &(&1); j 1 = f.(jx.(1))" do
-      f = &(&1)
-      assert catch_throw(j 1 = f.(jx.(1))) === :unimplemented
+      result = catch_throw do
+        f = &(&1)
+        j 1 = f.(jx.(1))
+        _ = jx
+      end
+      assert result === :unimplemented
     end
 
     test "f = &Function.identity/1; j 1 = (f.(jx)).(1)" do
       # f = &Function.identity/1
-      # j 1 = (f.(jx)).(1))
 
       assert catch_throw(Macro.expand(quote do
         j 1 = (f.(jx)).(1)
@@ -234,6 +265,64 @@ defmodule Jx.FunctionMatchingTest do
     test "j 1 = Function.identity(jx.(1))" do
       j 1 = Function.identity(jx.(1))
       assert jx === &Function.identity/1
+    end
+  end
+
+  describe "Integer module" do
+    test "pow/2 and **/2 for large integers avoids evaluation" do
+      # Integer.pow(3, 1_000_000_000) is too slow to evaluate.
+      task = Task.async(fn ->
+        try do
+          j {8, 2} = {jx.(2, 3), jx.(3, 1_000_000_000)}
+          _ = jx
+          :fail
+
+        rescue
+          MatchError ->
+            :pass
+        end
+      end)
+      reply = Task.await(task, 1000)
+      assert reply === :pass
+
+      task = Task.async(fn ->
+        try do
+          j {8, 3} = {jx.(2, 3), jx.(2, 1_000_000_000)}
+          _ = jx
+          :fail
+
+        rescue
+          MatchError ->
+            :pass
+        end
+      end)
+      reply = Task.await(task, 1000)
+      assert reply === :pass
+    end
+  end
+
+  describe "List module" do
+    test "[2, 2, 2] = jx.(2, 3)" do
+      j [2, 2, 2] = jx.(2, 3)
+      assert jx === &List.duplicate/2
+    end
+
+    test "duplicate/2 for large integers avoids evaluation" do
+      # List.duplicate(3, 1_000_000_000) is too slow / needs too much memory to evaluate.
+
+      task = Task.async(fn ->
+        try do
+          j {[2,2,2], 2} = {jx.(2, 3), jx.(3, 1_000_000_000)}
+          _ = jx
+          :fail
+
+        rescue
+          MatchError ->
+            :pass
+        end
+      end)
+      reply = Task.await(task, 1000)
+      assert reply === :pass
     end
   end
 end

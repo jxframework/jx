@@ -79,6 +79,8 @@ defmodule Jx do
   iex> require Jx; import Jx
   iex> j a = 1
   #Jx<a=1>
+  iex> a
+  1
   ```
 
   ```elixir

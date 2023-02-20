@@ -1,18 +1,18 @@
 defmodule Jx.Catalog.Helper do
   @moduledoc false
 
-  def define_catalog_module(module, opts \\ []) do
-    only_keys = case opts[:only] do
+  def define_catalog_module(module, options \\ []) do
+    only_keys = case options[:only] do
       nil ->
         module |> apply(:__info__, [:functions]) |> MapSet.new
 
       names when is_list(names) ->
         MapSet.new(names)
     end
-    except = opts |> Keyword.get(:except, []) |> MapSet.new
+    except = options |> Keyword.get(:except, []) |> MapSet.new
     included_keys = MapSet.difference(only_keys, except)
 
-    extra_defs = Keyword.get(opts, :defs, [])
+    extra_defs = Keyword.get(options, :defs, [])
 
     quote do
       defmodule unquote(Module.concat(Jx.Catalog, module)) do
@@ -32,7 +32,7 @@ defmodule Jx.Catalog.Helper do
         end
 
         def j(expr) do
-          %Jx{no_match: true}
+          nil
         end
       end
     end
@@ -46,18 +46,13 @@ defmodule Jx.Catalog do
 
   alias Jx.Catalog.Helper
 
-  modules = [
+  module_info = [
     {
       Function, only: [identity: 1],
       defs: [
         quote do
-          # XXX: this is causing test failures when it probably should not.
-          # def j({:=, _, [a, {:identity, _, b}]}) do
-          #   %Jx{expr: {:=, [], [a, b]}, index: nil}
-          # end
-
-          def j({:=, _, [a, {:identity, _, [{:j, _, _} = j]}]}) do
-            %Jx{expr: {:=, [], [a, j]}, index: nil}
+          def j({:=, _, [pattern, {:identity, _, [arg1]}]}) do
+            %Jx{expr: {:=, [], [pattern, arg1]}, index: nil}
           end
         end
       ]
@@ -70,19 +65,66 @@ defmodule Jx.Catalog do
             %Jx{no_match: true}
           end
 
-          def j({:=, _, [x, {:pow, _, [a, {:j, _, _} = j]}]} = expr) when is_integer(x) and x > 0 and is_integer(a) and a > 0 do
+          def j({:=, _, [x, {:pow, _, [a, term]}]} = expr) when is_integer(x) and x > 0 and is_integer(a) and a > 0 do
             case :math.log2(x) / :math.log2(a) do
               result when result - trunc(result) < 0.00001 ->
-                %Jx{expr: {:=, [], [trunc(result), j]}, index: nil}
+                %Jx{expr: {:=, [], [trunc(result), term]}, index: nil}
               _ ->
                 %Jx{no_match: true}
             end
           end
+
+          def j({:=, _, [x, {:pow, _, [x, b]}]}) when is_integer(x) and x > 0 and is_integer(b) do
+            case {x, b} do
+              {0, 0} -> %Jx{no_match: true}
+              {1, 0} -> %Jx{expr: {:=, [], [x, x]}, index: nil}
+              {_, 1} -> %Jx{expr: {:=, [], [x, x]}, index: nil}
+              {_, _} -> %Jx{no_match: true}
+            end
+          end
+
+          def j({:=, _, [_, {:pow, _, _}]}) do
+            %Jx{no_match: true}
+          end
         end
       ]
-    }, List, Tuple, Bitwise, 
+    }, 
+    { 
+      List, 
+      defs: [
+        quote do
+          def j({:=, _, [{:j, _, _}, {:duplicate, _, _}]}) do
+            nil
+          end
+
+          def j({:=, _, [lhs, {:duplicate, _, [_, b]}]}) when is_list(lhs) and is_integer(b) do
+            if length(lhs) !== b do
+              %Jx{no_match: true}
+            else
+              nil
+            end
+          end
+
+          def j({:=, _, [lhs, {:duplicate, _, [_, _]}]}) do
+            %Jx{no_match: true}
+          end
+        end
+      ]
+    },
+    Tuple, Bitwise, 
     {
-      Enum, except: [chunk: 2, partition: 2, uniq: 2] 
+      Enum, except: [chunk: 2, partition: 2, uniq: 2, shuffe: 1, random: 1],
+      defs: [
+        quote do
+          def j({:=, _, [_, {:group_by, _, [_enumerable, key_fun]}]}) when not is_function(key_fun) do
+            %Jx{no_match: true}
+          end
+
+          def j({:=, _, [_, {:into, _, [_, [_ | _]]}]}) do
+            %Jx{no_match: true}
+          end
+        end
+      ] 
     },
     { 
       Keyword, except: [size: 1, map: 2]
@@ -126,21 +168,48 @@ defmodule Jx.Catalog do
           def j({:=, _, [x, {:*, _, [{:j, _, _} = j, a]}]}) when is_integer(x) and is_integer(a) and a !== 0 do
             %Jx{expr: {:=, [], [div(x, a), j]}, index: nil} 
           end
+
+          def j({:=, _, [x, {:**, _, [1, {:j, _, _}]}]}) when is_integer(x) and x > 0 do
+            %Jx{no_match: true}
+          end
+
+          def j({:=, _, [x, {:**, _, [a, term]}]}) when is_integer(x) and x > 0 and is_integer(a) and a > 0 do
+            case :math.log2(x) / :math.log2(a) do
+              result when result - trunc(result) < 0.00001 ->
+                %Jx{expr: {:=, [], [trunc(result), term]}, index: nil}
+              _ ->
+                %Jx{no_match: true}
+            end
+          end
+
+          def j({:=, _, [x, {:**, _, [x, b]}]}) when is_integer(x) and x > 0 and is_integer(b) do
+            case {x, b} do
+              {0, 0} -> %Jx{no_match: true}
+              {1, 0} -> %Jx{expr: {:=, [], [x, x]}, index: nil}
+              {_, 1} -> %Jx{expr: {:=, [], [x, x]}, index: nil}
+              {_, _} -> %Jx{no_match: true}
+            end
+          end
+
+          def j({:=, _, [_, {:**, _, _}]}) do
+            %Jx{no_match: true}
+          end
         end
       ]
     }
   ]
-  Enum.each(modules, fn 
-    ({module, args}) ->
-      quoted_code = Helper.define_catalog_module(module, args)
-      Module.eval_quoted(__MODULE__, quoted_code)
 
-    (module) ->
-      quoted_code = Helper.define_catalog_module(module)
+  module_info
+  |> Stream.map(fn
+    (module) when is_atom(module) -> {module, []}
+    info -> info
+  end)
+  |> Enum.each(fn {module, options} ->
+      quoted_code = Helper.define_catalog_module(module, options)
       Module.eval_quoted(__MODULE__, quoted_code)
   end)
 
-  @_modules Enum.map(modules, fn {name, _} -> name; name -> name end)
+  @_modules Enum.map(module_info, fn {name, _} -> name; name -> name end)
 
   @doc """
   Returns a `%Jx{}` context that searches the modules of the catalog for a match.

@@ -51,30 +51,19 @@ defmodule Jx.FunctionMatching do
     end
   end
 
-  def j({:=, _, [lhs, {{:., _, [{:__aliases__, _, [module]}, function_name]}, _, args}]} = expr0) when is_atom(function_name) do
+  def j({:=, _, [lhs, {{:., _, [{:__aliases__, _, _} = aliases, function_name]}, _, args}]} = expr0) when is_atom(function_name) do
     expr = {:=, [], [lhs, {function_name, [], args}]}
-    catalog_module = Module.concat(Jx.Catalog, module)
-    index = [{catalog_module, :j, [expr]}]
 
-    case next(%Jx{expr: expr, index: index}) do
-      %Jx{no_match: true} ->
-        elixir_j(expr0)
-      %Jx{} = j ->
-        %Jx{j | expr: expr0}
-    end
+    module = Macro.expand(aliases, __ENV__)
+    catalog_module = Module.concat(Jx.Catalog, module)
+    
+    index = [{catalog_module, :j, [expr]}, {Jx.FunctionMatching, :elixir_j, [expr0]}]
+
+    next(%Jx{expr: expr, index: index})
   end
 
-  def j({:=, _, [lhs, {{:., _, [module, function_name]}, _, args}]} = expr0) when is_atom(module) and is_atom(function_name) do
-    expr = {:=, [], [lhs, {function_name, [], args}]}
-    catalog_module = Module.concat(Jx.Catalog, module)
-    index = [{catalog_module, :j, [expr]}]
-
-    case next(%Jx{expr: expr, index: index}) do
-      %Jx{no_match: true} ->
-        elixir_j(expr0)
-      %Jx{} = j ->
-        %Jx{j | expr: expr0}
-    end
+  def j({:=, _, [lhs, {{:., _, [module, function_name]}, _, args}]}) when is_atom(module) and is_atom(function_name) do
+    j({:=, [], [lhs, {{:., [], [{:__aliases__, [alias: false], module}, function_name]}, [], args}]})
   end
 
   def j({:=, _, [_, _]} = expr) do
@@ -82,7 +71,7 @@ defmodule Jx.FunctionMatching do
   end
 
   def elixir_j({:=, _, [_, _]} = expr) do
-    # Evaluate as Elixir expression.
+    # Evaluate using Elixir matching.
     try do
       Code.eval_quoted(expr)
     rescue
@@ -104,29 +93,36 @@ defmodule Jx.FunctionMatching do
       ([]) -> nil
 
       ([{module, function_name, args} | rest]) ->
-        %Jx{expr: expr, index: index, binding: binding} = apply(module, function_name, args)
 
-        case index do
-          nil when expr === nil ->
-            binding = Map.merge(context.binding, binding)
-
-            index = [index | rest]
-            {%Jx{binding: binding, index: index}, index}
-
+        case apply(module, function_name, args) do
           nil ->
-            case expr |> Jx.apply_binding(context) |> j do
-              %Jx{no_match: true} ->
-                {nil, rest}
+            {nil, rest}
 
-              %Jx{binding: binding} = j ->
+          %Jx{no_match: true} = j -> {j, []}
+
+          %Jx{expr: expr, index: index, binding: binding} ->          
+            case index do
+              nil when expr === nil ->
                 binding = Map.merge(context.binding, binding)
 
-                index = [j.index | rest]
+                index = [index | rest]
                 {%Jx{binding: binding, index: index}, index}
-            end
 
-          list when is_list(list) ->
-            {nil, index ++ rest}
+              nil ->
+                case expr |> Jx.apply_binding(context) |> j do
+                  %Jx{no_match: true} ->
+                    {nil, rest}
+
+                  %Jx{binding: binding} = j ->
+                    binding = Map.merge(context.binding, binding)
+
+                    index = [j.index | rest]
+                    {%Jx{binding: binding, index: index}, index}
+                end
+
+              list when is_list(list) ->
+                {nil, index ++ rest}
+            end
         end
 
       ([function | rest]) when is_function(function) ->

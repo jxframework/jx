@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0 (2023-02-20)
+
+* Implement efficient matching for `Integer.pow/2`, `Kernel.**/2`, and `List.duplicate/2` to speed up cases like `j 2 = jx.(3, 1_000_000_000)`
+* Remove impure functions `Enum.shuffle/1` and `Enum.random/1` from the catalog
+* Avoid deprecation warnings caused by `Enum.into/2` and `Enum.group_by/2`
+
 ## v0.4.0 (2023-02-13)
 
 * Implement support for plain variables in right-hand side of match expressions (e.g. `a = 10; j 10 = jx.(a)`)
