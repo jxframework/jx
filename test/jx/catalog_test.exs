@@ -4,10 +4,9 @@ defmodule Jx.CatalogTest do
 
   describe "Jx.Catalog.*" do
     test "value of module docs" do
-      docs = Code.fetch_docs(Jx.Catalog.Kernel)
-      assert docs === {:docs_v1, 1, :elixir, "text/markdown", :hidden, %{},
-        [{{:function, :j, 1}, 1, ["j(a)"], :none, %{}}]
-      }
+      assert {:docs_v1, 1, :elixir, "text/markdown", :hidden, %{},
+        [{{:function, :j, 1}, 1, ["j(" <> _], :none, %{}}]
+      } = Code.fetch_docs(Jx.Catalog.Kernel)
     end
   end
 end

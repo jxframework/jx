@@ -269,6 +269,13 @@ defmodule Jx.FunctionMatchingTest do
   end
 
   describe "Integer module" do
+    test "3 = jx.(1, 23_749_321)" do
+      assert_raise MatchError, fn ->
+        j 3 = jx.(1, 23_749_321)
+        _ = jx
+      end
+    end
+
     test "pow/2 and **/2 for large integers avoids evaluation" do
       # Integer.pow(3, 1_000_000_000) is too slow to evaluate.
       task = Task.async(fn ->

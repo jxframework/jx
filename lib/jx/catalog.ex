@@ -43,7 +43,7 @@ defmodule Jx.Catalog do
   @moduledoc """
   This module tracks the modules and functions that are used as possible matches in function matching. 
   """
-
+  alias __MODULE__
   alias Jx.Catalog.Helper
 
   module_info = [
@@ -61,30 +61,8 @@ defmodule Jx.Catalog do
       Integer, except: [to_char_list: 1, to_char_list: 2],
       defs: [
         quote do
-          def j({:=, _, [x, {:pow, _, [1, {:j, _, _}]}]}) when is_integer(x) and x > 0 do
-            %Jx{no_match: true}
-          end
-
-          def j({:=, _, [x, {:pow, _, [a, term]}]} = expr) when is_integer(x) and x > 0 and is_integer(a) and a > 0 do
-            case :math.log2(x) / :math.log2(a) do
-              result when result - trunc(result) < 0.00001 ->
-                %Jx{expr: {:=, [], [trunc(result), term]}, index: nil}
-              _ ->
-                %Jx{no_match: true}
-            end
-          end
-
-          def j({:=, _, [x, {:pow, _, [x, b]}]}) when is_integer(x) and x > 0 and is_integer(b) do
-            case {x, b} do
-              {0, 0} -> %Jx{no_match: true}
-              {1, 0} -> %Jx{expr: {:=, [], [x, x]}, index: nil}
-              {_, 1} -> %Jx{expr: {:=, [], [x, x]}, index: nil}
-              {_, _} -> %Jx{no_match: true}
-            end
-          end
-
-          def j({:=, _, [_, {:pow, _, _}]}) do
-            %Jx{no_match: true}
+          def j({:=, _, [pattern, {:pow, _, args}]}) do
+            Catalog.Kernel.j({:=, [], [pattern, {:**, [], args}]})
           end
         end
       ]
@@ -169,11 +147,11 @@ defmodule Jx.Catalog do
             %Jx{expr: {:=, [], [div(x, a), j]}, index: nil} 
           end
 
-          def j({:=, _, [x, {:**, _, [1, {:j, _, _}]}]}) when is_integer(x) and x > 0 do
+          def j({:=, _, [x, {:**, _, [1, _]}]}) when is_integer(x) and x > 1 do
             %Jx{no_match: true}
           end
 
-          def j({:=, _, [x, {:**, _, [a, term]}]}) when is_integer(x) and x > 0 and is_integer(a) and a > 0 do
+          def j({:=, _, [x, {:**, _, [a, term]}]} = expr) when is_integer(x) and x > 0 and is_integer(a) and a > 1 do
             case :math.log2(x) / :math.log2(a) do
               result when result - trunc(result) < 0.00001 ->
                 %Jx{expr: {:=, [], [trunc(result), term]}, index: nil}
