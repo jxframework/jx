@@ -1,29 +1,26 @@
 defmodule Jx.FunctionMatching do
   @moduledoc false
 
-  def j({:=, _, [lhs, rhs]} = expr) when is_list(lhs) and is_list(rhs) do
-    if length(lhs) !== length(rhs) do
-      raise MatchError
-
-    else
+  def j({:=, _, [pattern, list]} = expr) when is_list(pattern) and is_list(list) do
+    if length(pattern) === length(list) do
       path = 
-        [lhs, rhs]
+        [pattern, list]
         |> Enum.zip
         |> Enum.map(fn {a, b} -> 
           %Jx{expr: {:=, [], [a, b]}, index: nil} 
         end)
         |> List.update_at(0, &{%Jx{}, &1})
-
       next(%Jx{expr: expr, index: {path, []}})
+    else
+      %Jx{no_match: true}
     end
   end
 
-  def j({:=, _, [{:{}, _, lhs}, {:{}, _, rhs}]}) do
-    if length(lhs) !== length(rhs) do
-      raise MatchError
-
+  def j({:=, _, [{:{}, _, pattern}, {:{}, _, list}]}) when is_list(pattern) and is_list(list) do
+    if length(pattern) === length(list) do
+      j({:=, [], [pattern, list]})
     else
-      j({:=, [], [lhs, rhs]})
+      %Jx{no_match: true}
     end
   end
 

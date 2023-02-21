@@ -26,6 +26,40 @@ defmodule Jx.FunctionMatchingTest do
       j 139 = jx.([5, 19], 24)
       assert jx === &Integer.undigits/2
     end
+
+    test "[] = jx.([0])" do
+      j [] = jx.([0])
+      assert jx === Function.capture(Kernel, :tl, 1)
+    end
+
+    test "[] = jx.([0], 0)" do
+      j [] = jx.([0], 0)
+      assert jx === &List.delete_at/2 # also, List.duplicate/2
+    end
+
+    test "[] = jx.([0], 1)" do
+      j [] = jx.([0], 1)
+      assert jx === &Enum.drop_every/2
+    end
+
+    test "[] = jx.([0], -1)" do
+      j [] = jx.([0], -1)
+      assert jx === &List.delete_at/2
+    end
+
+    test "93 = jx.([93])" do
+      j 93 = jx.([93])
+      assert jx === &List.last/1
+      # Other options:
+      # - &List.first/1
+      # - &Kernel.hd/1
+    end
+
+    test "93 = jx.([93. 139])" do
+      j {93, 139} = {jx.([93, 139]), jy.([93, 139])}
+      assert jx === &List.first/1
+      assert jy === &List.last/1
+    end
   end
 
   describe "list of function variables" do
