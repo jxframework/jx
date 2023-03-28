@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.1 (2023-03-27)
+
+* Bug fixes
+
 ## v0.5.0 (2023-02-20)
 
 * Implement efficient matching for `Integer.pow/2`, `Kernel.**/2`, and `List.duplicate/2` to speed up cases like `j 2 = jx.(3, 1_000_000_000)`
